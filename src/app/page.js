@@ -1,65 +1,48 @@
 import Image from "next/image";
-
 export default function Home() {
+  const businesses = [
+    { slug: "nestvibe", name: "NestVibe", desc: "Real Estate CRM", color: "bg-primary text-primary-content" },
+    { slug: "next_impression", name: "Next Impression", desc: "Marketing CRM", color: "bg-secondary text-secondary-content" },
+    { slug: "no_chinta", name: "No Chinta", desc: "Healthcare CRM", color: "bg-accent text-accent-content" },
+    { slug: "study_first", name: "Study First", desc: "Visa Counseling CRM", color: "bg-neutral text-neutral-content" },
+  ];
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="flex flex-col flex-1 container max-w-6xl items-center mx-auto bg-zinc-50 font-sans dark:bg-black min-h-screen py-20 px-8">
+      
+      <div className="text-center mb-16 space-y-4">
+        <h1 className="text-5xl font-black tracking-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          Global Group CRM
+        </h1>
+        <p className="text-lg opacity-60 font-medium">
+          Select a business vertical to manage its leads and operations.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
+        {businesses.map((biz) => (
+          <a 
+            key={biz.slug} 
+            href={`/leads/${biz.slug}`}
+            className="group relative overflow-hidden rounded-3xl border border-base-200 bg-base-100 p-8 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:border-primary/30 flex flex-col justify-between min-h-[200px]"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
+            <div className={`absolute top-0 right-0 w-32 h-32 -mr-8 -mt-8 rounded-full opacity-10 transition-transform group-hover:scale-150 ${biz.color}`}></div>
+            
+            <div>
+              <h2 className="text-3xl font-black mb-2">{biz.name}</h2>
+              <p className="opacity-60 font-medium">{biz.desc}</p>
+            </div>
+            
+            <div className="flex items-center gap-2 text-sm font-bold opacity-0 -translate-x-4 transition-all group-hover:opacity-100 group-hover:translate-x-0 text-primary mt-8">
+              ENTER PORTAL 
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </div>
           </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        ))}
+      </div>
+
     </div>
   );
 }
