@@ -23,6 +23,14 @@ export async function GET(request) {
 
   const url = new URL(request.url);
   const businessSlug = url.searchParams.get("businessSlug");
+  const search = url.searchParams.get("search") || "";
+  const status = url.searchParams.get("status") || "all";
+  const tag = url.searchParams.get("tag") || "all";
+  const task = url.searchParams.get("task") || "all";
+  const startDate = url.searchParams.get("startDate") || "";
+  const endDate = url.searchParams.get("endDate") || "";
+  const page = parseInt(url.searchParams.get("page") || "1");
+  const limit = parseInt(url.searchParams.get("limit") || "15");
 
   await client.connect();
   const db = client.db();
@@ -34,7 +42,7 @@ export async function GET(request) {
      query.businessSlug = { $in: session.user.assignedBusinesses };
   } else if (session.user.role === "guest") {
      // Guests see nothing by default unless specified
-     return NextResponse.json([]);
+     return NextResponse.json({ leads: [], totalCount: 0, totalPages: 0, currentPage: 1 });
   }
 
   // If a specific portal is selected, filter by that portal
@@ -42,9 +50,48 @@ export async function GET(request) {
     query.businessSlug = businessSlug;
   }
 
-  const leads = await db.collection("leads").find(query).sort({ _id: -1 }).toArray();
+  if (search) {
+    query.$or = [
+      { name: { $regex: search, $options: "i" } },
+      { phone: { $regex: search, $options: "i" } },
+      { email: { $regex: search, $options: "i" } },
+      { lastConversation: { $regex: search, $options: "i" } }
+    ];
+  }
+
+  if (status !== "all") {
+    query.leadStatus = status;
+  }
+
+  if (tag !== "all") {
+    query.leadTag = tag;
+  }
+
+  if (task !== "all") {
+    query["taskScheduled.taskStatus"] = task;
+  }
+
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) query.createdAt.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt.$lte = end;
+    }
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [leads, totalCount, uniqueTags] = await Promise.all([
+    db.collection("leads").find(query).sort({ _id: -1 }).skip(skip).limit(limit).toArray(),
+    db.collection("leads").countDocuments(query),
+    db.collection("leads").distinct("leadTag", businessSlug ? { businessSlug } : {})
+  ]);
   
-  return NextResponse.json(leads);
+  const totalPages = Math.ceil(totalCount / limit);
+  
+  return NextResponse.json({ leads, totalCount, totalPages, currentPage: page, uniqueTags });
 }
 
 export async function POST(request) {

@@ -27,6 +27,10 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  
+  const [availableTags, setAvailableTags] = useState([]);
   
   // Bulk Actions
   const [selectedLeads, setSelectedLeads] = useState([]);
@@ -42,10 +46,37 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`/api/leads?businessSlug=${businessSlug}`);
+        const queryParams = new URLSearchParams({
+          businessSlug,
+          page: currentPage,
+          limit: itemsPerPage,
+          search: searchQuery,
+          status: statusFilter,
+          tag: tagFilter,
+          task: taskFilter,
+          startDate,
+          endDate
+        });
+
+        const res = await fetch(`/api/leads?${queryParams.toString()}`);
         const data = await res.json();
-        const filteredData = data.filter(lead => lead.leadTag === businessSlug || lead.businessSlug === businessSlug);
-        setLeads(filteredData);
+        
+        if (data.leads) {
+          setLeads(data.leads);
+          setTotalCount(data.totalCount);
+          setTotalPages(data.totalPages);
+          
+          // Merge default tags with dynamic tags to ensure base tags are always selectable
+          const fetchedTags = data.uniqueTags || [];
+          const defaultTags = ["nestvibe", "nextimpression", "no_chinta", "study_first"];
+          const mergedTags = [...new Set([...defaultTags, ...fetchedTags])];
+          setAvailableTags(mergedTags);
+        } else {
+          setLeads([]);
+          setTotalCount(0);
+          setTotalPages(0);
+          setAvailableTags(["nestvibe", "nextimpression", "no_chinta", "study_first"]);
+        }
 
         const empRes = await fetch("/api/employees");
         if (empRes.ok) {
@@ -56,8 +87,12 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
       }
     };
 
-    fetchData();
-  }, [businessSlug]); // Re-run when the route/slug changes
+    const delayDebounceFn = setTimeout(() => {
+      fetchData();
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [businessSlug, currentPage, itemsPerPage, searchQuery, statusFilter, tagFilter, taskFilter, startDate, endDate]);
 
   const {
     register,
@@ -65,6 +100,7 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm({
     defaultValues: {
@@ -72,10 +108,22 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
       phone: "",
       email: "",
       address: "",
+      jobTitle: "",
       leadTag: businessSlug,
       assignedTo: "",
       leadStatus: "new",
       lastConversation: "",
+      ieltsScore: "",
+      greScore: "",
+      sscResult: "",
+      hscResult: "",
+      diplomaHonorsResult: "",
+      mastersResult: "",
+      primaryTargetCountry: "",
+      secondaryTargetCountry: "",
+      fileOpened: "",
+      officeVisited: "",
+      leadSource: "",
       interestedOn: [
         {
           propertyName: "",
@@ -165,55 +213,9 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
   const canDelete = session?.user?.role === "admin" || (session?.user?.role === "employee" && session?.user?.permissions?.canDelete);
   const canWriteComment = session?.user?.role === "admin" || (session?.user?.role === "employee" && session?.user?.permissions?.canWriteComment);
 
-  // Apply Search & Filters
-  const displayedLeads = leads.filter(lead => {
-    // 1. Text Search (name, phone, email, remarks)
-    const q = searchQuery.toLowerCase();
-    const matchesSearch = !q || 
-      (lead.name?.toLowerCase().includes(q)) || 
-      (lead.phone?.toLowerCase().includes(q)) || 
-      (lead.email?.toLowerCase().includes(q)) || 
-      (lead.lastConversation?.toLowerCase().includes(q));
-      
-    // 2. Status Filter
-    const matchesStatus = statusFilter === "all" || lead.leadStatus === statusFilter;
-    
-    // 3. Tag Filter
-    const matchesTag = tagFilter === "all" || lead.leadTag === tagFilter;
-    
-    // 4. Task Filter
-    let matchesTask = true;
-    if (taskFilter !== "all") {
-      if (!lead.taskScheduled || lead.taskScheduled.length === 0) {
-        matchesTask = false;
-      } else {
-        matchesTask = lead.taskScheduled.some(t => t.taskStatus === taskFilter);
-      }
-    }
-    
-    // 5. Date Filter (Range)
-    let matchesDate = true;
-    if (startDate || endDate) {
-      if (!lead.createdAt) {
-        matchesDate = false;
-      } else {
-        const d = new Date(lead.createdAt);
-        const leadDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        
-        if (startDate && leadDate < startDate) matchesDate = false;
-        if (endDate && leadDate > endDate) matchesDate = false;
-      }
-    }
-    
-    return matchesSearch && matchesStatus && matchesTag && matchesTask && matchesDate;
-  });
-
-  const totalPages = Math.ceil(displayedLeads.length / itemsPerPage);
-  const paginatedLeads = displayedLeads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
   const toggleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedLeads(displayedLeads.map(l => l._id));
+      setSelectedLeads(leads.map(l => l._id));
     } else {
       setSelectedLeads([]);
     }
@@ -259,7 +261,14 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
   };
 
   const downloadSampleCSV = () => {
-    const csvContent = "data:text/csv;charset=utf-8,name,phone,email,address\nJohn Doe,+8801700000000,john@example.com,Dhaka\nJane Smith,+8801800000000,jane@example.com,Sylhet";
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFFname,phone,email,address,jobTitle,leadTag";
+    if (businessSlug === "study_first") {
+      csvContent += `,ieltsScore,greScore,primaryTargetCountry,secondaryTargetCountry,fileOpened,officeVisited,leadSource\nJohn Doe,+8801700000000,john@example.com,Dhaka,Software Engineer,${businessSlug},7.5,320,Canada,Australia,yes,yes,Facebook\nJane Smith,+8801800000000,jane@example.com,Sylhet,Manager,${businessSlug},6.0,,UK,USA,not decided,will try,Website`;
+    } else if (businessSlug === "nestvibe") {
+      csvContent += `,propertyName,propertyLocation\nJohn Doe,+8801700000000,john@example.com,Dhaka,Software Engineer,${businessSlug},Luxury Villa,Gulshan\nJane Smith,+8801800000000,jane@example.com,Sylhet,Manager,${businessSlug},Modern Apartment,Banani`;
+    } else {
+      csvContent += `\nJohn Doe,+8801700000000,john@example.com,Dhaka,Software Engineer,${businessSlug}\nJane Smith,+8801800000000,jane@example.com,Sylhet,Manager,${businessSlug}`;
+    }
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -286,7 +295,8 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
               onClick={() => {
                 setEditingId(null);
                 reset({
-                  name: "", phone: "", email: "", address: "", leadTag: businessSlug, assignedTo: "", leadStatus: "new", lastConversation: "",
+                  name: "", phone: "", email: "", address: "", jobTitle: "", leadTag: businessSlug, assignedTo: "", leadStatus: "new", lastConversation: "",
+                  ieltsScore: "", greScore: "", sscResult: "", hscResult: "", diplomaHonorsResult: "", mastersResult: "", primaryTargetCountry: "", secondaryTargetCountry: "", fileOpened: "", officeVisited: "", leadSource: "",
                   interestedOn: [{ propertyName: "", propertyLocation: "", link: "", lastPrice: "", clientBudget: "", isVisited: false }],
                   taskScheduled: [{ taskName: "", taskDetails: "", taskDeadline: "", taskStatus: "Pending" }]
                 });
@@ -309,8 +319,15 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
           
           <div className="alert alert-info text-xs mb-6 flex flex-col items-start gap-2">
             <p>
-              CSV must include columns: <b>name, phone, email, address</b>.<br/>
-              <b>name</b> and <b>phone</b> are mandatory.
+              CSV must include columns: <b>name, phone, email, address, jobTitle, leadTag</b>.
+              {businessSlug === "study_first" && (
+                <span><br/>Optional Study First columns: <b>ieltsScore, greScore, primaryTargetCountry, secondaryTargetCountry, fileOpened, officeVisited, leadSource</b>.</span>
+              )}
+              {businessSlug === "nestvibe" && (
+                <span><br/>Optional NestVibe columns: <b>propertyName, propertyLocation</b>.</span>
+              )}
+              <br/>
+              <b>name and phone</b> are mandatory.
             </p>
             <button 
               type="button" 
@@ -347,6 +364,11 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                   const bulkPayload = [];
 
                   results.data.forEach(row => {
+                    if (!row.name || !row.phone) {
+                      skippedCount++;
+                      return; // skip rows missing mandatory fields
+                    }
+
                     const rowPhone = cleanPhone(row.phone);
                     const rowEmail = row.email ? row.email.toLowerCase().trim() : "";
                     
@@ -359,20 +381,40 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                     if (rowPhone) uniqueInCSV.add(rowPhone);
                     if (rowEmail) uniqueInCSV.add(rowEmail);
 
-                    bulkPayload.push({
-                      name: row.name || "Unknown",
-                      phone: row.phone || "",
-                      email: row.email || "",
+                    const baseLead = {
+                      name: row.name,
+                      phone: row.phone,
+                      email: row.email,
                       address: row.address || "",
-                      leadTag: businessSlug,
+                      jobTitle: row.jobTitle || "",
+                      leadTag: row.leadTag || businessSlug,
                       businessSlug: businessSlug,
                       assignedTo: "",
                       leadStatus: "new",
                       lastConversation: `[${currentDate}] ${authorName}: Imported via CSV`,
                       comments: "",
-                      interestedOn: [{ propertyName: "", propertyLocation: "", link: "", lastPrice: "", clientBudget: "", isVisited: false }],
+                      interestedOn: [{ 
+                        propertyName: businessSlug === "nestvibe" ? (row.propertyName || "") : "", 
+                        propertyLocation: businessSlug === "nestvibe" ? (row.propertyLocation || "") : "", 
+                        link: "", 
+                        lastPrice: "", 
+                        clientBudget: "", 
+                        isVisited: false 
+                      }],
                       taskScheduled: []
-                    });
+                    };
+                    
+                    if (businessSlug === "study_first") {
+                      baseLead.ieltsScore = row.ieltsScore || "";
+                      baseLead.greScore = row.greScore || "";
+                      baseLead.primaryTargetCountry = row.primaryTargetCountry || "";
+                      baseLead.secondaryTargetCountry = row.secondaryTargetCountry || "";
+                      baseLead.fileOpened = row.fileOpened || "";
+                      baseLead.officeVisited = row.officeVisited || "";
+                      baseLead.leadSource = row.leadSource || "";
+                    }
+
+                    bulkPayload.push(baseLead);
                   });
 
                   if (bulkPayload.length === 0) {
@@ -452,18 +494,12 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                 />
               </div>
               <div className="form-control">
-                <label className="label">
-                  <span className="label-text">Assign To</span>
-                </label>
-                <select
-                  {...register("assignedTo")}
-                  className="select select-bordered w-full"
-                >
-                  <option value="">Unassigned</option>
-                  {employees.map((emp, i) => (
-                    <option key={emp.id || emp._id || i} value={emp.name}>{emp.name}</option>
-                  ))}
-                </select>
+                <label className="label text-xs font-bold">JOB TITLE</label>
+                <input
+                  {...register("jobTitle")}
+                  className="input input-bordered w-full"
+                  placeholder="Software Engineer"
+                />
               </div>
             </div>
 
@@ -567,6 +603,77 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                 placeholder="Remarks..."
               ></textarea>
             </div>
+
+            {(watch("leadTag") === "study_first" || businessSlug === "study_first") && (
+              <>
+                <div className="divider">STUDY FIRST DETAILS</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">IELTS SCORE</label>
+                    <input {...register("ieltsScore")} className="input input-bordered w-full" placeholder="e.g. 7.5" type="number" step="0.5" />
+                  </div>
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">GRE SCORE</label>
+                    <input {...register("greScore")} className="input input-bordered w-full" placeholder="e.g. 320" type="number" />
+                  </div>
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">SSC RESULT</label>
+                    <input {...register("sscResult")} className="input input-bordered w-full" placeholder="e.g. 5.00" />
+                  </div>
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">HSC RESULT</label>
+                    <input {...register("hscResult")} className="input input-bordered w-full" placeholder="e.g. 5.00" />
+                  </div>
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">DIPLOMA / HONORS RESULT</label>
+                    <input {...register("diplomaHonorsResult")} className="input input-bordered w-full" placeholder="e.g. 3.50" />
+                  </div>
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">MASTERS RESULT</label>
+                    <input {...register("mastersResult")} className="input input-bordered w-full" placeholder="e.g. 3.80" />
+                  </div>
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">PRIMARY TARGET COUNTRY</label>
+                    <input {...register("primaryTargetCountry")} className="input input-bordered w-full" placeholder="e.g. Canada" />
+                  </div>
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">SECONDARY TARGET COUNTRY</label>
+                    <input {...register("secondaryTargetCountry")} className="input input-bordered w-full" placeholder="e.g. Australia" />
+                  </div>
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">FILE OPENED?</label>
+                    <select {...register("fileOpened")} className="select select-bordered w-full">
+                      <option value="">Select...</option>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                      <option value="not decided">Not Decided</option>
+                    </select>
+                  </div>
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">OFFICE VISITED?</label>
+                    <select {...register("officeVisited")} className="select select-bordered w-full">
+                      <option value="">Select...</option>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                      <option value="will try">Will Try</option>
+                    </select>
+                  </div>
+                  <div className="form-control">
+                    <label className="label text-xs font-bold">LEAD SOURCE</label>
+                    <select {...register("leadSource")} className="select select-bordered w-full">
+                      <option value="">Select...</option>
+                      <option value="Facebook">Facebook</option>
+                      <option value="Instagram">Instagram</option>
+                      <option value="Website">Website</option>
+                      <option value="Inbound call">Inbound call</option>
+                      <option value="Outbound call">Outbound call</option>
+                      <option value="Whatsapp">Whatsapp</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="divider">QUERY ABOUT / INTERESTED PROPERTIES</div>
             {propFields.map((item, index) => (
@@ -735,10 +842,9 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
               onChange={(e) => setTagFilter(e.target.value)}
             >
               <option value="all">All Tags</option>
-              <option value="nestvibe">NestVibe</option>
-              <option value="nextimpression">Next Impression</option>
-              <option value="no_chinta">No Chinta</option>
-              <option value="study_first">Study First</option>
+              {availableTags.map((t, idx) => (
+                <option key={idx} value={t} className="capitalize">{t}</option>
+              ))}
             </select>
             <select 
               className="select select-sm select-bordered flex-1 min-w-[130px]"
@@ -756,16 +862,16 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
 
       {/* --- LEADS DISPLAY (HORIZONTAL STRIPS) --- */}
       <div className="flex flex-col gap-4 w-full pb-32">
-        {displayedLeads.length > 0 && (
+        {leads.length > 0 && (
           <div className="flex justify-between items-center bg-base-200 p-3 rounded-lg shadow-sm border border-base-300">
             <label className="flex items-center gap-2 cursor-pointer font-bold text-sm">
               <input 
                 type="checkbox" 
                 className="checkbox checkbox-sm checkbox-primary" 
                 onChange={toggleSelectAll}
-                checked={displayedLeads.length > 0 && selectedLeads.length === displayedLeads.length}
+                checked={leads.length > 0 && selectedLeads.length === leads.length}
               />
-              Select All ({displayedLeads.length})
+              Select All ({leads.length})
             </label>
             {selectedLeads.length > 0 && (
               <span className="badge badge-primary badge-outline font-bold">
@@ -775,15 +881,15 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
           </div>
         )}
 
-        {displayedLeads.length === 0 && (
+        {leads.length === 0 && (
           <div className="text-center py-20 bg-base-200 rounded-xl opacity-50 italic">
-            {leads.length === 0 
+            {totalCount === 0 && !searchQuery
               ? "No leads captured yet. Start by adding a new lead above." 
               : "No leads match your search/filters."}
           </div>
         )}
 
-        {paginatedLeads.map((lead, index) => {
+        {leads.map((lead, index) => {
           const displayIndex = (currentPage - 1) * itemsPerPage + index + 1;
           
           return (
@@ -882,11 +988,13 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                       <span className="text-xs font-bold capitalize truncate max-w-[80px]">
                         {lead.assignedTo || "Unassigned"}
                       </span>
-                      <span className={`text-[10px] font-black uppercase ${
-                        lead.taskScheduled?.[0]?.taskStatus === "Completed" ? "text-success" : "text-warning"
-                      }`}>
-                        {lead.taskScheduled?.[0]?.taskStatus || "Pending"}
-                      </span>
+                      {lead.taskScheduled?.[0]?.taskName?.trim() && (
+                        <span className={`text-[10px] font-black uppercase ${
+                          lead.taskScheduled?.[0]?.taskStatus === "Completed" ? "text-success" : "text-warning"
+                        }`}>
+                          {lead.taskScheduled?.[0]?.taskStatus || "Pending"}
+                        </span>
+                      )}
                     </div>
                   </div>
                   
@@ -914,6 +1022,9 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                     </p>
                     <p className="text-sm">
                       <strong>Address:</strong> {lead.address || "N/A"}
+                    </p>
+                    <p className="text-sm">
+                      <strong>Job Title:</strong> {lead.jobTitle || "N/A"}
                     </p>
                   </div>
                   <div>
@@ -1005,7 +1116,7 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                     Full Task Schedule
                   </h3>
                   <div className="space-y-2">
-                    {lead.taskScheduled?.map((t, i) => (
+                    {lead.taskScheduled?.filter(t => t.taskName?.trim()).map((t, i) => (
                       <div
                         key={i}
                         className="flex flex-col gap-1 p-2 bg-base-100 rounded border border-base-300"
@@ -1063,10 +1174,10 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
       </div>
 
       {/* --- PAGINATION --- */}
-      {displayedLeads.length > 0 && (
+      {leads.length > 0 && (
         <div className="flex flex-col md:flex-row justify-between items-center bg-base-100 p-4 rounded-xl border border-base-300 shadow-sm mt-6 gap-4">
           <div className="text-sm opacity-70">
-            Showing <span className="font-bold">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-bold">{Math.min(currentPage * itemsPerPage, displayedLeads.length)}</span> of <span className="font-bold">{displayedLeads.length}</span> leads
+            Showing <span className="font-bold">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-bold">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="font-bold">{totalCount}</span> leads
           </div>
           <div className="flex flex-wrap justify-center gap-4 items-center">
             <select 
@@ -1129,10 +1240,9 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
               onChange={(e) => setBulkTag(e.target.value)}
             >
               <option value="">Change Tag...</option>
-              <option value="nestvibe">NestVibe</option>
-              <option value="nextimpression">Next Impression</option>
-              <option value="no_chinta">No Chinta</option>
-              <option value="study_first">Study First</option>
+              {availableTags.map((t, idx) => (
+                <option key={idx} value={t} className="capitalize">{t}</option>
+              ))}
             </select>
             
             <select 

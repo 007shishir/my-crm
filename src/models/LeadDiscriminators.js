@@ -39,9 +39,19 @@ export const NoChintaLead = mongoose.models.NoChintaLead || Lead.discriminator('
 export const StudyFirstLead = mongoose.models.StudyFirstLead || Lead.discriminator('study_first', new mongoose.Schema({
   studentData: {
     targetCountry: { type: String },
+    primaryTargetCountry: { type: String },
+    secondaryTargetCountry: { type: String },
     intendedDegree: { type: String },
     intendedIntake: { type: String },
     ieltsScore: { type: Number, min: 0, max: 9 },
-    highestEducation: { type: String }
+    greScore: { type: Number },
+    highestEducation: { type: String },
+    sscResult: { type: String },
+    hscResult: { type: String },
+    diplomaHonorsResult: { type: String },
+    mastersResult: { type: String },
+    fileOpened: { type: String },
+    officeVisited: { type: String },
+    leadSource: { type: String }
   }
 }));
