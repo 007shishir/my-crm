@@ -35,7 +35,10 @@ export async function PUT(request) {
   const sanitizedUpdates = {};
   if (updates.leadStatus) sanitizedUpdates.leadStatus = updates.leadStatus;
   if (updates.leadTag) sanitizedUpdates.leadTag = updates.leadTag;
-  if (updates.assignedTo) sanitizedUpdates.assignedTo = updates.assignedTo;
+  if (updates.assignedTo) {
+    sanitizedUpdates.assignedTo = updates.assignedTo;
+    sanitizedUpdates.assignedAt = new Date().toISOString();
+  }
 
   if (Object.keys(sanitizedUpdates).length === 0) {
     return NextResponse.json({ error: "No valid updates provided" }, { status: 400 });

@@ -5,7 +5,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { useSession } from "@/lib/auth-client";
 import Papa from "papaparse";
 
-export default function LeadManager({ businessSlug = "nestvibe" }) {
+export default function LeadManager({ businessSlug = "nestvibe", mode = "portal" }) {
   const { data: session } = useSession();
   const [leads, setLeads] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -15,15 +15,19 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
   
   const [editingId, setEditingId] = useState(null);
   const [inlineRemarkText, setInlineRemarkText] = useState({});
+  const [inlineTask, setInlineTask] = useState({});
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [taskFilter, setTaskFilter] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  
+  const [startDate, setStartDate] = useState(mode === "follow-ups" || mode === "tasks" ? new Date().toISOString().split('T')[0] : "");
+  const [endDate, setEndDate] = useState(mode === "follow-ups" || mode === "tasks" ? new Date().toISOString().split('T')[0] : "");
+  const [triggerSearch, setTriggerSearch] = useState(0);
+  const [showFollowed, setShowFollowed] = useState(false);
+  const [taskView, setTaskView] = useState("pending"); // pending, all, completed
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
@@ -46,19 +50,41 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const queryParams = new URLSearchParams({
-          businessSlug,
-          page: currentPage,
-          limit: itemsPerPage,
-          search: searchQuery,
-          status: statusFilter,
-          tag: tagFilter,
-          task: taskFilter,
-          startDate,
-          endDate
-        });
+        let res;
+        
+        if (mode === "follow-ups") {
+          const queryParams = new URLSearchParams({
+            page: currentPage,
+            limit: itemsPerPage,
+            startDate,
+            endDate,
+            showFollowed
+          });
+          res = await fetch(`/api/employee/follow-ups?${queryParams.toString()}`);
+        } else if (mode === "tasks") {
+          const queryParams = new URLSearchParams({
+            page: currentPage,
+            limit: itemsPerPage,
+            startDate,
+            endDate,
+            taskView
+          });
+          res = await fetch(`/api/employee/tasks?${queryParams.toString()}`);
+        } else {
+          const queryParams = new URLSearchParams({
+            businessSlug,
+            page: currentPage,
+            limit: itemsPerPage,
+            search: searchQuery,
+            status: statusFilter,
+            tag: tagFilter,
+            task: taskFilter,
+            startDate,
+            endDate
+          });
+          res = await fetch(`/api/leads?${queryParams.toString()}`);
+        }
 
-        const res = await fetch(`/api/leads?${queryParams.toString()}`);
         const data = await res.json();
         
         if (data.leads) {
@@ -89,10 +115,11 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
 
     const delayDebounceFn = setTimeout(() => {
       fetchData();
-    }, 500);
+    }, 100);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [businessSlug, currentPage, itemsPerPage, searchQuery, statusFilter, tagFilter, taskFilter, startDate, endDate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessSlug, currentPage, itemsPerPage, triggerSearch, showFollowed, taskView, mode]);
 
   const {
     register,
@@ -179,14 +206,15 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
     const currentDate = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
     const authorName = session?.user?.name || "User";
     
-    // Format the remark with date and author
-    const formattedRemark = data.lastConversation ? `[${currentDate}] ${authorName}: ${data.lastConversation}` : "";
-
-    const payload = { ...data, businessSlug, leadTag: data.leadTag || businessSlug, lastConversation: formattedRemark, comments: "" };
+    const payload = { ...data, businessSlug, leadTag: data.leadTag || businessSlug, comments: "" };
 
     if (editingId) {
       // EDIT MODE
-      payload.lastConversation = data.lastConversation;
+      const oldLead = leads.find(l => l._id === editingId);
+      const oldHistory = oldLead?.lastConversation || "";
+      const newRemark = data.lastConversation ? `[${currentDate}] ${authorName}: ${data.lastConversation}` : "";
+      
+      payload.lastConversation = oldHistory ? (newRemark ? oldHistory + "\n" + newRemark : oldHistory) : newRemark;
 
       await fetch(`/api/leads/${editingId}`, {
         method: "PUT",
@@ -195,6 +223,9 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
       });
     } else {
       // CREATE MODE
+      const formattedRemark = data.lastConversation ? `[${currentDate}] ${authorName}: ${data.lastConversation}` : "";
+      payload.lastConversation = formattedRemark;
+
       await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -205,13 +236,14 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
     // Quick refresh of the leads
     const refreshRes = await fetch(`/api/leads?businessSlug=${businessSlug}`);
     const newData = await refreshRes.json();
-    const filteredData = newData.filter(lead => lead.leadTag === businessSlug || lead.businessSlug === businessSlug);
+    const filteredData = (newData.leads || []).filter(lead => lead.leadTag === businessSlug || lead.businessSlug === businessSlug);
     setLeads(filteredData);
   };
 
   const canAddLead = session?.user?.role === "admin" || (session?.user?.role === "employee" && session?.user?.permissions?.canAddLead);
   const canDelete = session?.user?.role === "admin" || (session?.user?.role === "employee" && session?.user?.permissions?.canDelete);
   const canWriteComment = session?.user?.role === "admin" || (session?.user?.role === "employee" && session?.user?.permissions?.canWriteComment);
+  const canEditLead = session?.user?.role === "admin" || (session?.user?.role === "employee" && session?.user?.permissions?.canEditLead);
 
   const toggleSelectAll = (e) => {
     if (e.target.checked) {
@@ -253,7 +285,7 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
       
       const refreshRes = await fetch(`/api/leads?businessSlug=${businessSlug}`);
       const newData = await refreshRes.json();
-      const filteredData = newData.filter(lead => lead.leadTag === businessSlug || lead.businessSlug === businessSlug);
+      const filteredData = (newData.leads || []).filter(lead => lead.leadTag === businessSlug || lead.businessSlug === businessSlug);
       setLeads(filteredData);
     } else {
       alert("Failed to apply bulk actions.");
@@ -281,8 +313,10 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
   return (
     <div className="p-8 w-full">
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-xl opacity-50">Manage Leads</h2>
-        {canAddLead && (
+        <h2 className="text-xl opacity-50">
+          {mode === "follow-ups" ? "Leads to Follow Up" : mode === "tasks" ? "Tasks To Complete" : "Manage Leads"}
+        </h2>
+        {mode === "portal" && canAddLead && (
           <div className="flex gap-2">
             <button
               className="btn btn-outline btn-neutral shadow-sm"
@@ -434,7 +468,7 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                     // Quick refresh of the leads
                     const refreshRes = await fetch(`/api/leads?businessSlug=${businessSlug}`);
                     const newData = await refreshRes.json();
-                    const filteredData = newData.filter(lead => lead.leadTag === businessSlug || lead.businessSlug === businessSlug);
+                    const filteredData = (newData.leads || []).filter(lead => lead.leadTag === businessSlug || lead.businessSlug === businessSlug);
                     setLeads(filteredData);
                   } else {
                     alert("Failed to import CSV. Ensure you have permission.");
@@ -506,7 +540,14 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div className="form-control">
                 <label className="label text-xs font-bold">LEAD TAG</label>
-                {isCustomTag ? (
+                {session?.user?.role === "employee" ? (
+                  <div>
+                    <input type="hidden" {...register("leadTag")} />
+                    <div className="badge badge-neutral font-bold p-3 capitalize">
+                      {watch("leadTag")?.replace(/_/g, " ") || businessSlug.replace(/_/g, " ")}
+                    </div>
+                  </div>
+                ) : isCustomTag ? (
                   <div className="flex gap-2">
                     <input 
                       {...register("leadTag")} 
@@ -519,7 +560,7 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                       className="btn btn-square btn-outline btn-sm h-12 w-12" 
                       onClick={() => {
                         setIsCustomTag(false);
-                        setValue("leadTag", "nestvibe");
+                        setValue("leadTag", availableTags[0] || "nestvibe");
                       }}
                     >✕</button>
                   </div>
@@ -535,10 +576,11 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                     })} 
                     className="select select-bordered w-full"
                   >
-                    <option value="nestvibe">NestVibe</option>
-                    <option value="nextimpression">Next Impression</option>
-                    <option value="no_chinta">No Chinta</option>
-                    <option value="study_first">Study First</option>
+                    {availableTags.map((tag, idx) => (
+                      <option key={idx} value={tag} className="capitalize">
+                        {tag.replace(/_/g, " ")}
+                      </option>
+                    ))}
                     <option value="CREATE_NEW" className="font-bold text-primary bg-base-200">+ Create New...</option>
                   </select>
                 )}
@@ -596,11 +638,16 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
             </div>
 
             <div className="form-control mt-4">
-              <label className="label text-xs font-bold">REMARK</label>
+              <label className="label text-xs font-bold">{editingId ? "ADD NEW REMARK" : "REMARK"}</label>
+              {editingId && leads.find(l => l._id === editingId)?.lastConversation && (
+                <div className="bg-base-200 p-3 rounded-lg text-xs font-mono mb-2 whitespace-pre-wrap opacity-70">
+                  {leads.find(l => l._id === editingId).lastConversation}
+                </div>
+              )}
               <textarea
                 {...register("lastConversation")}
                 className="textarea textarea-bordered w-full"
-                placeholder="Remarks..."
+                placeholder={editingId ? "Type a new remark to append..." : "Remarks..."}
               ></textarea>
             </div>
 
@@ -791,15 +838,17 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
 
       {/* --- SEARCH & FILTERS BAR --- */}
       <div className="bg-base-100 p-4 rounded-xl border border-base-300 shadow-sm mb-6 flex flex-col gap-4 w-full">
-        <div className="form-control w-full">
-          <input 
-            type="text" 
-            placeholder="Search name, phone, email, or remarks..." 
-            className="input input-sm input-bordered w-full"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+        {mode === "portal" && (
+          <div className="form-control w-full">
+            <input 
+              type="text" 
+              placeholder="Search name, phone, email, or remarks..." 
+              className="input input-sm input-bordered w-full"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        )}
         
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center w-full">
           {/* Date Range */}
@@ -821,41 +870,101 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
             />
           </div>
 
+          {mode === "follow-ups" && (
+            <div className="flex bg-base-200 rounded-lg p-1 font-bold shadow-sm w-full lg:w-auto">
+              <button 
+                className={`px-4 py-1 text-sm rounded-md transition-all flex-1 ${!showFollowed ? 'bg-base-100 text-primary shadow' : 'opacity-60 hover:opacity-100'}`}
+                onClick={() => { setShowFollowed(false); setCurrentPage(1); setTriggerSearch(t => t+1); }}
+              >
+                Unfollowed
+              </button>
+              <button 
+                className={`px-4 py-1 text-sm rounded-md transition-all flex-1 ${showFollowed ? 'bg-success text-success-content shadow' : 'opacity-60 hover:opacity-100'}`}
+                onClick={() => { setShowFollowed(true); setCurrentPage(1); setTriggerSearch(t => t+1); }}
+              >
+                Followed
+              </button>
+            </div>
+          )}
+
+          {mode === "tasks" && (
+            <div className="flex bg-base-200 rounded-lg p-1 font-bold shadow-sm w-full lg:w-auto">
+              <button 
+                className={`px-4 py-1 text-sm rounded-md transition-all flex-1 ${taskView === 'pending' ? 'bg-warning text-warning-content shadow' : 'opacity-60 hover:opacity-100'}`}
+                onClick={() => { setTaskView('pending'); setCurrentPage(1); setTriggerSearch(t => t+1); }}
+              >
+                Pending Tasks
+              </button>
+              <button 
+                className={`px-4 py-1 text-sm rounded-md transition-all flex-1 ${taskView === 'completed' ? 'bg-success text-success-content shadow' : 'opacity-60 hover:opacity-100'}`}
+                onClick={() => { setTaskView('completed'); setCurrentPage(1); setTriggerSearch(t => t+1); }}
+              >
+                Completed Tasks
+              </button>
+              <button 
+                className={`px-4 py-1 text-sm rounded-md transition-all flex-1 ${taskView === 'all' ? 'bg-base-100 text-primary shadow' : 'opacity-60 hover:opacity-100'}`}
+                onClick={() => { setTaskView('all'); setCurrentPage(1); setTriggerSearch(t => t+1); }}
+              >
+                All Tasks
+              </button>
+            </div>
+          )}
+
           {/* Dropdown Filters */}
           <div className="flex flex-wrap md:flex-nowrap gap-2 w-full lg:flex-1">
-            <select 
-              className="select select-sm select-bordered flex-1 min-w-[130px]"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+            {mode === "portal" && (
+              <>
+                <select 
+                  className="select select-sm select-bordered flex-1 min-w-[130px]"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="new">New</option>
+                  <option value="called">Called</option>
+                  <option value="busy">Busy</option>
+                  <option value="unreachable">Unreachable</option>
+                  <option value="not_interested">Not Interested</option>
+                  <option value="bad_lead">Bad Lead</option>
+                </select>
+                <select 
+                  className="select select-sm select-bordered flex-1 min-w-[130px]"
+                  value={tagFilter}
+                  onChange={(e) => setTagFilter(e.target.value)}
+                >
+                  <option value="all">All Tags</option>
+                  <option value="study_first">Study First</option>
+                  <option value="nestvibe">Nestvibe</option>
+                  <option value="no_chinta">No Chinta</option>
+                  <option value="nextimpression">Nextimpression</option>
+                  {availableTags.map((t, idx) => (
+                    !["study_first", "nestvibe", "no_chinta", "nextimpression"].includes(t) &&
+                    <option key={idx} value={t} className="capitalize">{t}</option>
+                  ))}
+                </select>
+              </>
+            )}
+            {mode === "portal" && (
+              <select 
+                className="select select-sm select-bordered flex-1 min-w-[130px]"
+                value={taskFilter}
+                onChange={(e) => setTaskFilter(e.target.value)}
+              >
+                <option value="all">All Tasks</option>
+                <option value="Pending">Task: Pending</option>
+                <option value="Completed">Task: Completed</option>
+                <option value="Canceled">Task: Canceled</option>
+              </select>
+            )}
+            <button 
+              className="btn btn-sm btn-primary shrink-0"
+              onClick={() => {
+                setCurrentPage(1);
+                setTriggerSearch(t => t + 1);
+              }}
             >
-              <option value="all">All Statuses</option>
-              <option value="new">New</option>
-              <option value="called">Called</option>
-              <option value="busy">Busy</option>
-              <option value="unreachable">Unreachable</option>
-              <option value="not_interested">Not Interested</option>
-              <option value="bad_lead">Bad Lead</option>
-            </select>
-            <select 
-              className="select select-sm select-bordered flex-1 min-w-[130px]"
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-            >
-              <option value="all">All Tags</option>
-              {availableTags.map((t, idx) => (
-                <option key={idx} value={t} className="capitalize">{t}</option>
-              ))}
-            </select>
-            <select 
-              className="select select-sm select-bordered flex-1 min-w-[130px]"
-              value={taskFilter}
-              onChange={(e) => setTaskFilter(e.target.value)}
-            >
-              <option value="all">All Tasks</option>
-              <option value="Pending">Task: Pending</option>
-              <option value="Completed">Task: Completed</option>
-              <option value="Canceled">Task: Canceled</option>
-            </select>
+              Find Now
+            </button>
           </div>
         </div>
       </div>
@@ -892,15 +1001,22 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
         {leads.map((lead, index) => {
           const displayIndex = (currentPage - 1) * itemsPerPage + index + 1;
           
+          let isPastDue = false;
+          if (mode === "tasks") {
+            const pendingTasks = (lead.taskScheduled || []).filter(t => t.taskStatus === "Pending");
+            const now = new Date().getTime();
+            isPastDue = pendingTasks.some(t => t.taskDeadline && new Date(t.taskDeadline).getTime() < now);
+          }
+          
           return (
           <div
             key={lead._id}
-            className="collapse bg-base-100 border border-base-300 shadow-sm hover:border-primary transition-colors"
+            className={`collapse border border-base-300 shadow-sm hover:border-primary transition-colors ${isPastDue ? 'bg-error/10' : 'bg-base-100'}`}
           >
             <input type="checkbox" className="peer" />
 
             {/* THE VISIBLE ROW (Header) */}
-            <div className="collapse-title p-0 min-h-0 bg-base-100 hover:bg-base-200/50 transition-colors">
+            <div className={`collapse-title p-0 min-h-0 ${isPastDue ? 'hover:bg-error/20' : 'hover:bg-base-200/50'} transition-colors`}>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-center p-4">
                 
                 {/* Column 1: Client Info (Takes up 4 cols on large screens) */}
@@ -1036,78 +1152,81 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                     </div>
                     
                     {/* Inline Remark Input */}
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        placeholder="Add a new remark..."
-                        className="input input-sm input-bordered flex-1"
-                        value={inlineRemarkText[lead._id] || ""}
-                        onChange={(e) => setInlineRemarkText({...inlineRemarkText, [lead._id]: e.target.value})}
-                      />
-                      <button 
-                        className="btn btn-sm btn-primary"
-                        onClick={async () => {
-                          const text = inlineRemarkText[lead._id];
-                          if (!text) return;
-                          
-                          const currentDate = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-                          const authorName = session?.user?.name || "User";
-                          const formattedRemark = `[${currentDate}] ${authorName}: ${text}`;
-                          
-                          const newConversation = lead.lastConversation 
-                            ? lead.lastConversation + "\n" + formattedRemark 
-                            : formattedRemark;
-                          
-                          // Optimistic update
-                          setLeads(leads.map(l => l._id === lead._id ? { ...l, lastConversation: newConversation } : l));
-                          setInlineRemarkText({...inlineRemarkText, [lead._id]: ""});
+                    {canWriteComment && (
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="Add a new remark..."
+                          className="input input-sm input-bordered flex-1"
+                          value={inlineRemarkText[lead._id] || ""}
+                          onChange={(e) => setInlineRemarkText({...inlineRemarkText, [lead._id]: e.target.value})}
+                        />
+                        <button 
+                          className="btn btn-sm btn-primary"
+                          onClick={async () => {
+                            const text = inlineRemarkText[lead._id];
+                            if (!text) return;
+                            
+                            const currentDate = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+                            const authorName = session?.user?.name || "User";
+                            const formattedRemark = `[${currentDate}] ${authorName}: ${text}`;
+                            
+                            const newConversation = lead.lastConversation 
+                              ? lead.lastConversation + "\n" + formattedRemark 
+                              : formattedRemark;
+                            
+                            // Optimistic update
+                            setLeads(leads.map(l => l._id === lead._id ? { ...l, lastConversation: newConversation } : l));
+                            setInlineRemarkText({...inlineRemarkText, [lead._id]: ""});
 
-                          await fetch(`/api/leads/${lead._id}`, {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ ...lead, lastConversation: newConversation }),
-                          });
-                        }}
-                      >
-                        Add
-                      </button>
-                    </div>
+                            await fetch(`/api/leads/${lead._id}`, {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ ...lead, lastConversation: newConversation }),
+                            });
+                          }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Full Property List */}
+                {/* Update Lead Status */}
                 <div className="lg:col-span-1">
-                  <h3 className="text-xs font-black opacity-50 uppercase mb-2">
-                    Services / Properties
-                  </h3>
-                  <div className="space-y-2">
-                    {lead.interestedOn?.map((p, i) => (
-                      <div
-                        key={i}
-                        className="bg-base-100 p-2 rounded text-xs border border-base-300 flex justify-between items-center"
+                  {canEditLead && (
+                    <>
+                      <h3 className="text-xs font-black opacity-50 uppercase mb-2">
+                        Update Lead Status
+                      </h3>
+                      <select 
+                        className={`select select-sm select-bordered w-full font-black ${
+                          lead.leadStatus === 'called' ? 'text-info' :
+                          lead.leadStatus === 'unreachable' ? 'text-warning' :
+                          lead.leadStatus === 'not_interested' ? 'text-error' :
+                          lead.leadStatus === 'bad_lead' ? 'text-error' : 'text-neutral'
+                        }`}
+                        value={lead.leadStatus || "new"}
+                        onChange={async (e) => {
+                          const newStatus = e.target.value;
+                          setLeads(leads.map(l => l._id === lead._id ? { ...l, leadStatus: newStatus } : l));
+                          await fetch(`/api/leads/${lead._id}`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ ...lead, leadStatus: newStatus }),
+                          });
+                        }}
                       >
-                        <div>
-                          <p className="font-bold">{p.propertyName}</p>
-                          <a
-                            href={p.link}
-                            className="link link-primary text-[10px] truncate block max-w-[150px]"
-                          >
-                            {p.link}
-                          </a>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-primary">
-                            {p.clientBudget}
-                          </p>
-                          {p.isVisited && (
-                            <span className="text-[9px] text-success font-black">
-                              VISITED
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        <option value="new">NEW</option>
+                        <option value="called">CALLED</option>
+                        <option value="unreachable">UNREACHABLE</option>
+                        <option value="busy">BUSY</option>
+                        <option value="not_interested">NOT INTERESTED</option>
+                        <option value="bad_lead">BAD LEAD</option>
+                      </select>
+                    </>
+                  )}
                 </div>
 
                 {/* Full Task List */}
@@ -1135,6 +1254,61 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                       </div>
                     ))}
                   </div>
+                  
+                  {canEditLead && (
+                    <div className="flex flex-col gap-2 mt-4 p-3 bg-base-100 rounded border border-base-300">
+                      <h4 className="text-xs font-bold text-primary">Add New Task</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <input 
+                          className="input input-xs input-bordered w-full"
+                          placeholder="Task Name"
+                          value={inlineTask[lead._id]?.taskName || ""}
+                          onChange={e => setInlineTask({...inlineTask, [lead._id]: {...inlineTask[lead._id], taskName: e.target.value}})}
+                        />
+                        <input 
+                          type="date"
+                          className="input input-xs input-bordered w-full"
+                          value={inlineTask[lead._id]?.taskDeadline || ""}
+                          onChange={e => setInlineTask({...inlineTask, [lead._id]: {...inlineTask[lead._id], taskDeadline: e.target.value}})}
+                        />
+                        <input 
+                          className="input input-xs input-bordered w-full md:col-span-2"
+                          placeholder="Task Details"
+                          value={inlineTask[lead._id]?.taskDetails || ""}
+                          onChange={e => setInlineTask({...inlineTask, [lead._id]: {...inlineTask[lead._id], taskDetails: e.target.value}})}
+                        />
+                      </div>
+                      <button 
+                        className="btn btn-xs btn-primary self-end mt-1"
+                        onClick={async () => {
+                          const taskData = inlineTask[lead._id];
+                          if (!taskData || !taskData.taskName) return;
+                          
+                          const newTask = {
+                            taskName: taskData.taskName,
+                            taskDetails: taskData.taskDetails || "",
+                            taskDeadline: taskData.taskDeadline || "",
+                            taskStatus: "Pending"
+                          };
+                          
+                          const updatedTasks = [...(lead.taskScheduled || []), newTask];
+                          
+                          // Optimistic update
+                          setLeads(leads.map(l => l._id === lead._id ? { ...l, taskScheduled: updatedTasks } : l));
+                          setInlineTask({...inlineTask, [lead._id]: {}});
+
+                          await fetch(`/api/leads/${lead._id}`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ ...lead, taskScheduled: updatedTasks }),
+                          });
+                        }}
+                      >
+                        Add Task
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex justify-end gap-2 mt-6">
                     {canDelete && (
                       <button 
@@ -1158,7 +1332,7 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
                         className="btn btn-primary btn-xs"
                         onClick={() => {
                           setEditingId(lead._id);
-                          reset(lead);
+                          reset({ ...lead, lastConversation: "" });
                           document.getElementById("add_lead_modal").showModal();
                         }}
                       >
@@ -1234,16 +1408,18 @@ export default function LeadManager({ businessSlug = "nestvibe" }) {
               <option value="bad_lead">Bad Lead</option>
             </select>
             
-            <select 
-              className="select select-sm select-bordered w-full sm:w-auto"
-              value={bulkTag}
-              onChange={(e) => setBulkTag(e.target.value)}
-            >
-              <option value="">Change Tag...</option>
-              {availableTags.map((t, idx) => (
-                <option key={idx} value={t} className="capitalize">{t}</option>
-              ))}
-            </select>
+            {session?.user?.role !== "employee" && (
+              <select 
+                className="select select-sm select-bordered w-full sm:w-auto"
+                value={bulkTag}
+                onChange={(e) => setBulkTag(e.target.value)}
+              >
+                <option value="">Change Tag...</option>
+                {availableTags.map((t, idx) => (
+                  <option key={idx} value={t} className="capitalize">{t}</option>
+                ))}
+              </select>
+            )}
             
             <select 
               className="select select-sm select-bordered w-full sm:w-auto"

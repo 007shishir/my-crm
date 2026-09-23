@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { signUp } from "@/lib/auth-client";
+import { signUp, authClient } from "@/lib/auth-client";
 
 export default function UserManagementPage() {
   const [users, setUsers] = useState([]);
@@ -14,6 +14,7 @@ export default function UserManagementPage() {
   // Edit User Permissions State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
     fetchUsers();
@@ -49,11 +50,23 @@ export default function UserManagementPage() {
       assignedBusinesses: user.assignedBusinesses || [],
       permissions: user.permissions || { canAddLead: false, canEditLead: false, canWriteComment: false, canDelete: false }
     });
+    setNewPassword("");
     setIsEditModalOpen(true);
   };
 
   const handleSavePermissions = async (e) => {
     e.preventDefault();
+    
+    if (newPassword) {
+      const res = await authClient.admin.setUserPassword({
+        userId: editingUser.id || editingUser._id,
+        newPassword: newPassword,
+      });
+      if (res.error) {
+        alert("Failed to change password: " + res.error.message);
+        return;
+      }
+    }
     await fetch("/api/admin/users", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -182,6 +195,17 @@ export default function UserManagementPage() {
                   <option value="employee">Employee</option>
                   <option value="guest">Guest</option>
                 </select>
+              </div>
+
+              <div className="form-control w-full mt-4">
+                <label className="label"><span className="label-text font-bold">Change Password</span></label>
+                <input 
+                  type="password" 
+                  className="input input-bordered w-full" 
+                  placeholder="Enter new password to change..."
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
               </div>
 
               {editingUser.role === "employee" && (

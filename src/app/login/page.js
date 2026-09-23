@@ -23,8 +23,8 @@ export default function LoginPage() {
       await signUp.email({
         email,
         password,
-        name: name || "New Admin",
-        role: "admin", // automatically assign admin for this initial setup
+        name: name || "New Guest",
+        role: "guest", // automatically assign guest for this initial setup
         callbackURL: "/"
       }, {
         onError: (ctx) => {
@@ -52,7 +52,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="card-body">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-black bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              {isSignUp ? "Create Admin" : "Global Group CRM"}
+              {isSignUp ? "Sign Up" : "Global Group CRM"}
             </h2>
             <button 
               type="button" 

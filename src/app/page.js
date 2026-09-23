@@ -1,11 +1,31 @@
+"use client";
+
 import Image from "next/image";
+import { useSession } from "@/lib/auth-client";
+
 export default function Home() {
-  const businesses = [
+  const { data: session, isPending } = useSession();
+
+  const allBusinesses = [
     { slug: "nestvibe", name: "NestVibe", desc: "Real Estate CRM", color: "bg-primary text-primary-content" },
     { slug: "next_impression", name: "Next Impression", desc: "Marketing CRM", color: "bg-secondary text-secondary-content" },
     { slug: "no_chinta", name: "No Chinta", desc: "Healthcare CRM", color: "bg-accent text-accent-content" },
     { slug: "study_first", name: "Study First", desc: "Visa Counseling CRM", color: "bg-neutral text-neutral-content" },
   ];
+
+  let businesses = allBusinesses;
+  
+  if (session?.user?.role === "employee" && session?.user?.assignedBusinesses?.length > 0) {
+    businesses = allBusinesses.filter(biz => session.user.assignedBusinesses.includes(biz.slug));
+  } else if (session?.user?.role === "employee") {
+    businesses = [];
+  } else if (session?.user?.role === "guest") {
+    businesses = [];
+  }
+
+  if (isPending) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
 
   return (
     <div className="flex flex-col flex-1 container max-w-6xl items-center mx-auto bg-zinc-50 font-sans dark:bg-black min-h-screen py-20 px-8">

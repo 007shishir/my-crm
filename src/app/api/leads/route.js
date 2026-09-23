@@ -37,9 +37,12 @@ export async function GET(request) {
 
   let query = {};
   
-  // If the user is an employee, they should only see leads for their assigned businesses
-  if (session.user.role === "employee" && session.user.assignedBusinesses?.length > 0) {
-     query.businessSlug = { $in: session.user.assignedBusinesses };
+  // If the user is an employee, they should only see leads assigned to them and for their assigned businesses
+  if (session.user.role === "employee") {
+     query.assignedTo = session.user.name;
+     if (session.user.assignedBusinesses?.length > 0) {
+        query.businessSlug = { $in: session.user.assignedBusinesses };
+     }
   } else if (session.user.role === "guest") {
      // Guests see nothing by default unless specified
      return NextResponse.json({ leads: [], totalCount: 0, totalPages: 0, currentPage: 1 });
