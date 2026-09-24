@@ -30,7 +30,7 @@ export default function RootLayout({ children }) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${bengaliFont.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex">
+      <body className="min-h-full flex bg-base-100 text-base-content">
         <Providers>
           <Sidebar />
           <main className="flex-1 min-h-screen overflow-y-auto">
