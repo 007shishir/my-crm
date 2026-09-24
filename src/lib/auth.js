@@ -8,6 +8,7 @@ const db = client.db();
 import { admin } from "better-auth/plugins";
 
 export const auth = betterAuth({
+  trustedOrigins: ["https://crm.nextimpressionstudio.com", "http://localhost:3000"],
   plugins: [admin()],
   database: mongodbAdapter(db),
   user: {
