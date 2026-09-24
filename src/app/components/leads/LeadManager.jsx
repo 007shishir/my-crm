@@ -1165,7 +1165,7 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
                         <input 
                           type="text" 
                           placeholder="Add a new remark..."
-                          className="input input-sm input-bordered flex-1"
+                          className="input input-sm input-bordered flex-1 text-base-content"
                           value={inlineRemarkText[lead._id] || ""}
                           onChange={(e) => setInlineRemarkText({...inlineRemarkText, [lead._id]: e.target.value})}
                         />

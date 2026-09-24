@@ -111,6 +111,13 @@ export default function Sidebar() {
         </nav>
 
         <div className="p-4 border-t border-base-300 space-y-2">
+          <label className="flex items-center justify-between cursor-pointer px-4 py-3 rounded-xl hover:bg-base-200 text-sm font-bold opacity-80 hover:opacity-100 transition-all">
+            <span className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+              Theme
+            </span>
+            <input type="checkbox" value="dark" className="toggle theme-controller toggle-sm" />
+          </label>
           <Link href="/profile" onClick={closeSidebar} className="block px-4 py-3 rounded-xl hover:bg-base-200 text-sm font-bold opacity-80 hover:opacity-100 transition-all">
             ⚙️ Profile Settings
           </Link>
