@@ -311,13 +311,13 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
   };
 
   return (
-    <div className="p-8 w-full">
-      <div className="flex justify-between items-center mb-8">
+    <div className="p-4 md:p-8 w-full">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <h2 className="text-xl opacity-50">
           {mode === "follow-ups" ? "Leads to Follow Up" : mode === "tasks" ? "Tasks To Complete" : "Manage Leads"}
         </h2>
         {mode === "portal" && canAddLead && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <button
               className="btn btn-outline btn-neutral shadow-sm"
               onClick={() => document.getElementById("import_csv_modal").showModal()}
@@ -1021,8 +1021,8 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
                 
                 {/* Column 1: Client Info (Takes up 4 cols on large screens) */}
                 <div className="lg:col-span-4 flex flex-col justify-center">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="relative z-20">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <div className="relative z-20 shrink-0">
                       <input 
                         type="checkbox" 
                         className="checkbox checkbox-sm checkbox-primary"
@@ -1031,11 +1031,11 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
                         onClick={(e) => e.stopPropagation()}
                       />
                     </div>
-                    <span className="font-bold text-lg opacity-30 min-w-[24px] text-right">{displayIndex}.</span>
-                    <h2 className="font-black text-xl text-primary capitalize leading-tight truncate">
+                    <span className="font-bold text-lg opacity-30 min-w-[24px] text-right shrink-0">{displayIndex}.</span>
+                    <h2 className="font-black text-lg md:text-xl text-primary capitalize leading-tight flex-1 min-w-[120px] break-words">
                       {lead.name || "Unnamed"}
                     </h2>
-                    <span className="text-[10px] font-mono opacity-40 bg-base-200 px-1 rounded border border-base-300" title="Unique ID">
+                    <span className="text-[10px] font-mono opacity-40 bg-base-200 px-1 rounded border border-base-300 shrink-0" title="Unique ID">
                       #{lead._id.slice(-6)}
                     </span>
                   </div>
@@ -1044,9 +1044,17 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
                     {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "No Date"}
                   </div>
                   <div className="flex flex-wrap gap-2 items-center">
-                    <span className="badge badge-outline badge-sm font-semibold opacity-70">
-                      {lead.phone || "No Phone"}
-                    </span>
+                    {lead.phone ? (
+                      <div className="relative z-20">
+                        <a href={`tel:${lead.phone}`} onClick={(e) => e.stopPropagation()} className="badge badge-outline badge-sm font-semibold opacity-70 hover:bg-base-200 cursor-pointer">
+                          {lead.phone}
+                        </a>
+                      </div>
+                    ) : (
+                      <span className="badge badge-outline badge-sm font-semibold opacity-70">
+                        No Phone
+                      </span>
+                    )}
                     <span className={`badge badge-sm font-bold capitalize ${
                       lead.leadTag === 'nestvibe' ? 'badge-primary' : 
                       lead.leadTag === 'nextimpression' ? 'badge-secondary' : 'badge-accent'
