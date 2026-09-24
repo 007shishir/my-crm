@@ -22,6 +22,7 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
   const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [taskFilter, setTaskFilter] = useState("all");
+  const [assignedFilter, setAssignedFilter] = useState("all");
   const [startDate, setStartDate] = useState(mode === "follow-ups" || mode === "tasks" ? new Date().toISOString().split('T')[0] : "");
   const [endDate, setEndDate] = useState(mode === "follow-ups" || mode === "tasks" ? new Date().toISOString().split('T')[0] : "");
   const [triggerSearch, setTriggerSearch] = useState(0);
@@ -45,7 +46,7 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
   useEffect(() => {
     // Reset to page 1 when filters change
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, tagFilter, taskFilter, startDate, endDate, itemsPerPage]);
+  }, [searchQuery, statusFilter, tagFilter, taskFilter, assignedFilter, startDate, endDate, itemsPerPage]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,6 +80,7 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
             status: statusFilter,
             tag: tagFilter,
             task: taskFilter,
+            assignedTo: assignedFilter,
             startDate,
             endDate
           });
@@ -945,16 +947,31 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
               </>
             )}
             {mode === "portal" && (
-              <select 
-                className="select select-sm select-bordered flex-1 min-w-[130px]"
-                value={taskFilter}
-                onChange={(e) => setTaskFilter(e.target.value)}
-              >
-                <option value="all">All Tasks</option>
-                <option value="Pending">Task: Pending</option>
-                <option value="Completed">Task: Completed</option>
-                <option value="Canceled">Task: Canceled</option>
-              </select>
+              <>
+                <select 
+                  className="select select-sm select-bordered flex-1 min-w-[130px]"
+                  value={taskFilter}
+                  onChange={(e) => setTaskFilter(e.target.value)}
+                >
+                  <option value="all">All Tasks</option>
+                  <option value="Pending">Task: Pending</option>
+                  <option value="Completed">Task: Completed</option>
+                  <option value="Canceled">Task: Canceled</option>
+                </select>
+                {session?.user?.role === "admin" && (
+                  <select 
+                    className="select select-sm select-bordered flex-1 min-w-[130px]"
+                    value={assignedFilter}
+                    onChange={(e) => setAssignedFilter(e.target.value)}
+                  >
+                    <option value="all">All Assignments</option>
+                    <option value="unassigned">Unassigned</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.name}>{emp.name}</option>
+                    ))}
+                  </select>
+                )}
+              </>
             )}
             <button 
               className="btn btn-sm btn-primary shrink-0"

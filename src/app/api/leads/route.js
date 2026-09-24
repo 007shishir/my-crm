@@ -27,6 +27,7 @@ export async function GET(request) {
   const status = url.searchParams.get("status") || "all";
   const tag = url.searchParams.get("tag") || "all";
   const task = url.searchParams.get("task") || "all";
+  const assignedTo = url.searchParams.get("assignedTo") || "all";
   const startDate = url.searchParams.get("startDate") || "";
   const endDate = url.searchParams.get("endDate") || "";
   const page = parseInt(url.searchParams.get("page") || "1");
@@ -46,6 +47,13 @@ export async function GET(request) {
   } else if (session.user.role === "guest") {
      // Guests see nothing by default unless specified
      return NextResponse.json({ leads: [], totalCount: 0, totalPages: 0, currentPage: 1 });
+  } else {
+     // Admin
+     if (assignedTo === "unassigned") {
+       query.assignedTo = { $in: ["", null] };
+     } else if (assignedTo !== "all") {
+       query.assignedTo = assignedTo;
+     }
   }
 
   // If a specific portal is selected, filter by that portal

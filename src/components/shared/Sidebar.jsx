@@ -87,6 +87,9 @@ export default function Sidebar() {
               <Link href="/admin/users" onClick={closeSidebar} className="block px-4 py-3 rounded-xl hover:bg-base-200 text-sm font-bold opacity-80 hover:opacity-100 transition-all">
                 👥 User Management
               </Link>
+              <Link href="/admin/employee-reports" onClick={closeSidebar} className="block px-4 py-3 rounded-xl hover:bg-base-200 text-sm font-bold opacity-80 hover:opacity-100 transition-all">
+                📈 Employee Reports
+              </Link>
               <Link href="/admin/statuses" onClick={closeSidebar} className="block px-4 py-3 rounded-xl hover:bg-base-200 text-sm font-bold opacity-80 hover:opacity-100 transition-all">
                 🏷️ Lead Settings
               </Link>
