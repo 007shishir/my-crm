@@ -28,7 +28,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col flex-1 container max-w-6xl items-center mx-auto bg-zinc-50 font-sans dark:bg-black min-h-screen py-20 px-8">
+    <div className="flex flex-col flex-1 container max-w-6xl items-center mx-auto bg-base-100 font-sans min-h-screen py-20 px-8">
       
       <div className="text-center mb-16 space-y-4">
         <h1 className="text-5xl font-black tracking-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
