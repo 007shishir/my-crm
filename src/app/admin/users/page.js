@@ -31,14 +31,32 @@ export default function UserManagementPage() {
 
   const handleAddUser = async (e) => {
     e.preventDefault();
-    await signUp.email({
+    const res = await authClient.admin.createUser({
       name: newUser.name,
       email: newUser.email,
       password: newUser.password,
       role: newUser.role,
-      assignedBusinesses: [],
-      permissions: { canAddLead: false, canEditLead: false, canWriteComment: false, canDelete: false }
     });
+    
+    if (res.error) {
+      alert("Failed to create user: " + res.error.message);
+      return;
+    }
+    
+    // Set custom properties if needed using the custom PUT endpoint
+    if (res.data?.user) {
+      await fetch("/api/admin/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          id: res.data.user.id, 
+          role: newUser.role, 
+          assignedBusinesses: [], 
+          permissions: { canAddLead: false, canEditLead: false, canWriteComment: false, canDelete: false } 
+        }),
+      });
+    }
+
     setIsAddModalOpen(false);
     setNewUser({ name: "", email: "", password: "", role: "employee" });
     fetchUsers();
