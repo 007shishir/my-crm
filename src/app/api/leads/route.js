@@ -32,6 +32,12 @@ export async function GET(request) {
   const endDate = url.searchParams.get("endDate") || "";
   const page = parseInt(url.searchParams.get("page") || "1");
   const limit = parseInt(url.searchParams.get("limit") || "15");
+  
+  // Study First Filters
+  const primaryTargetCountry = url.searchParams.get("primaryTargetCountry") || "";
+  const fileOpened = url.searchParams.get("fileOpened") || "all";
+  const officeVisited = url.searchParams.get("officeVisited") || "all";
+  const leadSource = url.searchParams.get("leadSource") || "all";
 
   await client.connect();
   const db = client.db();
@@ -80,6 +86,20 @@ export async function GET(request) {
 
   if (task !== "all") {
     query["taskScheduled.taskStatus"] = task;
+  }
+
+  // Apply Study First filters if they are provided
+  if (primaryTargetCountry) {
+    query.primaryTargetCountry = { $regex: primaryTargetCountry, $options: "i" };
+  }
+  if (fileOpened !== "all") {
+    query.fileOpened = fileOpened;
+  }
+  if (officeVisited !== "all") {
+    query.officeVisited = officeVisited;
+  }
+  if (leadSource !== "all") {
+    query.leadSource = leadSource;
   }
 
   if (startDate || endDate) {

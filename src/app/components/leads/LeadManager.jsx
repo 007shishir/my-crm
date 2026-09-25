@@ -23,6 +23,10 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
   const [tagFilter, setTagFilter] = useState("all");
   const [taskFilter, setTaskFilter] = useState("all");
   const [assignedFilter, setAssignedFilter] = useState("all");
+  const [primaryTargetCountryFilter, setPrimaryTargetCountryFilter] = useState("");
+  const [fileOpenedFilter, setFileOpenedFilter] = useState("all");
+  const [officeVisitedFilter, setOfficeVisitedFilter] = useState("all");
+  const [leadSourceFilter, setLeadSourceFilter] = useState("all");
   const [startDate, setStartDate] = useState(mode === "follow-ups" || mode === "tasks" ? new Date().toISOString().split('T')[0] : "");
   const [endDate, setEndDate] = useState(mode === "follow-ups" || mode === "tasks" ? new Date().toISOString().split('T')[0] : "");
   const [triggerSearch, setTriggerSearch] = useState(0);
@@ -46,7 +50,7 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
   useEffect(() => {
     // Reset to page 1 when filters change
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, tagFilter, taskFilter, assignedFilter, startDate, endDate, itemsPerPage]);
+  }, [searchQuery, statusFilter, tagFilter, taskFilter, assignedFilter, startDate, endDate, itemsPerPage, primaryTargetCountryFilter, fileOpenedFilter, officeVisitedFilter, leadSourceFilter]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -81,6 +85,12 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
             tag: tagFilter,
             task: taskFilter,
             assignedTo: assignedFilter,
+            ...(businessSlug === "study_first" && {
+              primaryTargetCountry: primaryTargetCountryFilter,
+              fileOpened: fileOpenedFilter,
+              officeVisited: officeVisitedFilter,
+              leadSource: leadSourceFilter
+            }),
             startDate,
             endDate
           });
@@ -310,6 +320,73 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const downloadFilteredLeads = async () => {
+    try {
+      const queryParams = new URLSearchParams({
+        businessSlug,
+        page: 1,
+        limit: 1000000,
+        search: searchQuery,
+        status: statusFilter,
+        tag: tagFilter,
+        task: taskFilter,
+        assignedTo: assignedFilter,
+        ...(businessSlug === "study_first" && {
+          primaryTargetCountry: primaryTargetCountryFilter,
+          fileOpened: fileOpenedFilter,
+          officeVisited: officeVisitedFilter,
+          leadSource: leadSourceFilter
+        }),
+        startDate,
+        endDate
+      });
+      
+      const res = await fetch(`/api/leads?${queryParams.toString()}`);
+      const data = await res.json();
+      const exportLeads = data.leads || [];
+
+      if (exportLeads.length === 0) {
+        return alert("No leads to download for these filters.");
+      }
+
+      // Flatten nested data for CSV export
+      const flattenedLeads = exportLeads.map(lead => {
+        // Extract the first interest/property for the CSV columns
+        const interest = lead.interestedOn?.[0] || {};
+        
+        // Return a flattened object
+        return {
+          ...lead,
+          "Service/Property Name": interest.propertyName || "",
+          "Location/Service Details": interest.propertyLocation || "",
+          "Client Budget": interest.clientBudget || "",
+          "Property Link": interest.link || "",
+          "Last Price": interest.lastPrice || "",
+          "Is Visited": interest.isVisited ? "Yes" : "No",
+          
+          // Remove the raw arrays so they don't show up as [object Object]
+          interestedOn: undefined,
+          taskScheduled: undefined
+        };
+      });
+
+      // Convert to CSV and download
+      const csv = Papa.unparse(flattenedLeads);
+      const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `filtered_leads_${businessSlug}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Error downloading leads:", error);
+      alert("Failed to download leads.");
+    }
   };
 
   return (
@@ -913,7 +990,7 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
           )}
 
           {/* Dropdown Filters */}
-          <div className="flex flex-wrap md:flex-nowrap gap-2 w-full lg:flex-1">
+          <div className="flex flex-wrap gap-2 w-full lg:flex-1">
             {mode === "portal" && (
               <>
                 <select 
@@ -971,6 +1048,51 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
                     ))}
                   </select>
                 )}
+                {businessSlug === "study_first" && (
+                  <>
+                    <input 
+                      type="text"
+                      className="input input-sm input-bordered flex-1 min-w-[130px]"
+                      placeholder="Target Country"
+                      value={primaryTargetCountryFilter}
+                      onChange={(e) => setPrimaryTargetCountryFilter(e.target.value)}
+                    />
+                    <select 
+                      className="select select-sm select-bordered flex-1 min-w-[130px]"
+                      value={fileOpenedFilter}
+                      onChange={(e) => setFileOpenedFilter(e.target.value)}
+                    >
+                      <option value="all">File Opened?</option>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                      <option value="not decided">Not Decided</option>
+                    </select>
+                    <select 
+                      className="select select-sm select-bordered flex-1 min-w-[130px]"
+                      value={officeVisitedFilter}
+                      onChange={(e) => setOfficeVisitedFilter(e.target.value)}
+                    >
+                      <option value="all">Office Visited?</option>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                      <option value="will try">Will Try</option>
+                    </select>
+                    <select 
+                      className="select select-sm select-bordered flex-1 min-w-[130px]"
+                      value={leadSourceFilter}
+                      onChange={(e) => setLeadSourceFilter(e.target.value)}
+                    >
+                      <option value="all">Lead Source</option>
+                      <option value="Facebook">Facebook</option>
+                      <option value="Instagram">Instagram</option>
+                      <option value="Website">Website</option>
+                      <option value="Inbound call">Inbound call</option>
+                      <option value="Outbound call">Outbound call</option>
+                      <option value="Whatsapp">Whatsapp</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </>
+                )}
               </>
             )}
             <button 
@@ -982,6 +1104,14 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
             >
               Find Now
             </button>
+            {session?.user?.role === "admin" && (
+              <button 
+                className="btn btn-sm btn-secondary shrink-0"
+                onClick={downloadFilteredLeads}
+              >
+                Download
+              </button>
+            )}
           </div>
         </div>
       </div>
