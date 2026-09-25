@@ -359,6 +359,7 @@ export default function LeadManager({ businessSlug = "nestvibe", mode = "portal"
         // Return a flattened object
         return {
           ...lead,
+          phone: lead.phone ? `="${lead.phone}"` : "",
           "Service/Property Name": interest.propertyName || "",
           "Location/Service Details": interest.propertyLocation || "",
           "Client Budget": interest.clientBudget || "",
